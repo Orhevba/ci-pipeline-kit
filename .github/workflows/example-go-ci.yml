@@ -4,13 +4,13 @@ name: Example — Go project
 # for real (not just documentation) against the sample app in
 # examples/go-project. This is what a *caller* workflow looks like in
 # another repo using this kit — the only difference cross-repo is the
-# `uses:` line becomes `owner/ci-pipeline-kit/.github/workflows/x.yml@main`
+# `uses:` line becomes `owner/ci-pipeline-kit/.github/workflows/x.yml@master`
 # instead of the relative `./.github/workflows/x.yml` used here, since
 # this example happens to live in the same repo as the kit itself.
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "examples/go-project/**"
       - ".github/workflows/example-go-ci.yml"

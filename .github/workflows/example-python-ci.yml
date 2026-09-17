@@ -2,7 +2,7 @@ name: Example — Python project
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "examples/python-project/**"
       - ".github/workflows/example-python-ci.yml"

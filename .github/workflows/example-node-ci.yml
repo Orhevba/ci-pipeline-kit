@@ -2,7 +2,7 @@ name: Example — Node project
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "examples/node-project/**"
       - ".github/workflows/example-node-ci.yml"

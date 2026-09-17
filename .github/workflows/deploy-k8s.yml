@@ -9,7 +9,7 @@ name: Deploy to Kubernetes
 # inherit custom secrets automatically — only GITHUB_TOKEN is automatic):
 #   jobs:
 #     deploy:
-#       uses: <owner>/ci-pipeline-kit/.github/workflows/deploy-k8s.yml@main
+#       uses: <owner>/ci-pipeline-kit/.github/workflows/deploy-k8s.yml@master
 #       with:
 #         manifests-path: ./k8s
 #         namespace: default

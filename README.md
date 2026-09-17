@@ -29,14 +29,14 @@ instead of the stages' actual implementation:
 # a caller repo's own .github/workflows/ci.yml
 jobs:
   lint:
-    uses: Orhevba/ci-pipeline-kit/.github/workflows/go-lint.yml@main
+    uses: Orhevba/ci-pipeline-kit/.github/workflows/go-lint.yml@master
   test:
-    uses: Orhevba/ci-pipeline-kit/.github/workflows/go-test.yml@main
+    uses: Orhevba/ci-pipeline-kit/.github/workflows/go-test.yml@master
   security-scan:
-    uses: Orhevba/ci-pipeline-kit/.github/workflows/go-security-scan.yml@main
+    uses: Orhevba/ci-pipeline-kit/.github/workflows/go-security-scan.yml@master
   build:
     needs: [lint, test, security-scan]
-    uses: Orhevba/ci-pipeline-kit/.github/workflows/go-build.yml@main
+    uses: Orhevba/ci-pipeline-kit/.github/workflows/go-build.yml@master
 ```
 
 ## What's here
@@ -84,9 +84,9 @@ might seem. The examples' own workflows call the reusable workflows with
    on: [push, pull_request]
    jobs:
      lint:
-       uses: Orhevba/ci-pipeline-kit/.github/workflows/go-lint.yml@main
+       uses: Orhevba/ci-pipeline-kit/.github/workflows/go-lint.yml@master
      test:
-       uses: Orhevba/ci-pipeline-kit/.github/workflows/go-test.yml@main
+       uses: Orhevba/ci-pipeline-kit/.github/workflows/go-test.yml@master
    ```
 2. Pass `with:` inputs to override defaults (see each workflow file for
    its full input list — `go-version`, `working-directory`, etc.).
@@ -100,7 +100,7 @@ might seem. The examples' own workflows call the reusable workflows with
        permissions:
          contents: read
          packages: write
-       uses: Orhevba/ci-pipeline-kit/.github/workflows/docker-build-push.yml@main
+       uses: Orhevba/ci-pipeline-kit/.github/workflows/docker-build-push.yml@master
        with:
          image-name: my-app
          push: true
@@ -111,7 +111,7 @@ might seem. The examples' own workflows call the reusable workflows with
    ```yaml
    jobs:
      deploy:
-       uses: Orhevba/ci-pipeline-kit/.github/workflows/deploy-k8s.yml@main
+       uses: Orhevba/ci-pipeline-kit/.github/workflows/deploy-k8s.yml@master
        with:
          manifests-path: ./k8s
          namespace: default
@@ -125,10 +125,10 @@ might seem. The examples' own workflows call the reusable workflows with
 
 ## Versioning
 
-Every example above pins `@main` for simplicity while this is a personal
+Every example above pins `@master` for simplicity while this is a personal
 project under active development. For anything you'd actually depend on
 long-term, pin a tag instead (`@v1`, or a specific commit SHA) once this
-repo starts cutting releases — pinning `@main` means a caller gets
+repo starts cutting releases — pinning `@master` means a caller gets
 whatever this repo's default branch looks like *right now*, which is
 fine for learning/portfolio use but not for a pipeline you don't want to
 break out from under you.

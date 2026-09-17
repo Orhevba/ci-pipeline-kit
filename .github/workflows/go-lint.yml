@@ -3,7 +3,7 @@ name: Go Lint
 # Reusable workflow — called from another repo's workflow with:
 #   jobs:
 #     lint:
-#       uses: <owner>/ci-pipeline-kit/.github/workflows/go-lint.yml@main
+#       uses: <owner>/ci-pipeline-kit/.github/workflows/go-lint.yml@master
 #       with:
 #         go-version: "1.22"
 
