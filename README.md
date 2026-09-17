@@ -1,0 +1,143 @@
+# ci-pipeline-kit
+
+[![CI](https://github.com/Orhevba/ci-pipeline-kit/actions/workflows/self-test.yml/badge.svg)](https://github.com/Orhevba/ci-pipeline-kit/actions/workflows/self-test.yml)
+[![Example: Go](https://github.com/Orhevba/ci-pipeline-kit/actions/workflows/example-go-ci.yml/badge.svg)](https://github.com/Orhevba/ci-pipeline-kit/actions/workflows/example-go-ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+A library of **reusable GitHub Actions workflows** — lint, test, security
+scan, build, and deploy as separate, composable stages instead of one
+monolithic pipeline copy-pasted into every repo. Point a project's own CI
+at these, and it gets a consistent, maintained pipeline instead of a
+one-off written from scratch — fix a bug or add a check here once, and
+every repo using it benefits next run, no copy-paste required.
+
+## Why stages, not one big workflow
+
+A typical repo's CI is a single `.github/workflows/ci.yml` with everything
+inlined — lint, test, build, all hand-written per project. That's fine
+once. It stops being fine the second you have five repos and want to add
+a security scan to all of them, or fix a caching bug that's now
+duplicated five times.
+
+This repo instead publishes each stage as its own [reusable
+workflow](https://docs.github.com/en/actions/using-workflows/reusing-workflows)
+(`on: workflow_call`), parameterized with inputs. A project's own workflow
+becomes a short list of `uses:` lines chaining the stages it wants,
+instead of the stages' actual implementation:
+
+```yaml
+# a caller repo's own .github/workflows/ci.yml
+jobs:
+  lint:
+    uses: Orhevba/ci-pipeline-kit/.github/workflows/go-lint.yml@main
+  test:
+    uses: Orhevba/ci-pipeline-kit/.github/workflows/go-test.yml@main
+  security-scan:
+    uses: Orhevba/ci-pipeline-kit/.github/workflows/go-security-scan.yml@main
+  build:
+    needs: [lint, test, security-scan]
+    uses: Orhevba/ci-pipeline-kit/.github/workflows/go-build.yml@main
+```
+
+## What's here
+
+| Workflow | Stage | Stack |
+|---|---|---|
+| `go-lint.yml` | `gofmt` + `go vet` | Go |
+| `go-test.yml` | `go build` + `go test -cover` | Go |
+| `go-security-scan.yml` | `gosec` (insecure code patterns) + `govulncheck` (known CVEs in dependencies) | Go |
+| `go-build.yml` | `go build`, optional artifact upload | Go |
+| `node-ci.yml` | install, lint, test — combined, lighter | Node |
+| `python-ci.yml` | install, `ruff` lint, `pytest` — combined, lighter | Python |
+| `docker-build-push.yml` | build (and optionally push to GHCR) an image | any — stack-agnostic |
+| `deploy-k8s.yml` | `kubectl apply` against a target cluster | any — stack-agnostic |
+
+**Go is the fully-built reference implementation** (all four stages,
+separately, matching real production pipeline shape). **Node and Python
+are deliberately lighter** — one combined workflow each, to prove the
+reusable-workflow pattern generalizes across stacks without needing full
+stage-by-stage parity on day one. Extending either to match Go's depth
+means adding `node-security-scan.yml`/`node-build.yml` (and the Python
+equivalents) the same way the Go ones are built.
+
+## Examples (run for real, not just documentation)
+
+`examples/go-project`, `examples/node-project`, and
+`examples/python-project` are tiny real apps, each with a workflow at the
+repo root (`example-go-ci.yml`, etc.) that actually chains the relevant
+reusable workflows against them on every push — so the badges above are
+proof these pipelines genuinely work, not just YAML that looks right.
+
+Note the example workflows live at the **repo root** (`.github/workflows/`),
+not nested under `examples/*/`. GitHub Actions only ever discovers
+workflow files in a repo's top-level `.github/workflows/` directory — a
+`.github/workflows/` folder nested inside a subdirectory is never
+triggered, however tempting a "real-looking" per-example repo structure
+might seem. The examples' own workflows call the reusable workflows with
+`working-directory:` pointed at the example's subfolder instead.
+
+## Using this from another repo
+
+1. Add a workflow to that repo calling whichever stages you want:
+   ```yaml
+   name: CI
+   on: [push, pull_request]
+   jobs:
+     lint:
+       uses: Orhevba/ci-pipeline-kit/.github/workflows/go-lint.yml@main
+     test:
+       uses: Orhevba/ci-pipeline-kit/.github/workflows/go-test.yml@main
+   ```
+2. Pass `with:` inputs to override defaults (see each workflow file for
+   its full input list — `go-version`, `working-directory`, etc.).
+3. For `docker-build-push.yml`, the calling job needs
+   `permissions: packages: write` itself — a reusable workflow's own
+   `permissions:` block can only narrow what the caller already granted,
+   never widen it:
+   ```yaml
+   jobs:
+     build-image:
+       permissions:
+         contents: read
+         packages: write
+       uses: Orhevba/ci-pipeline-kit/.github/workflows/docker-build-push.yml@main
+       with:
+         image-name: my-app
+         push: true
+   ```
+4. For `deploy-k8s.yml`, pass the kubeconfig as a secret explicitly —
+   reusable workflows don't inherit custom secrets automatically, only
+   `GITHUB_TOKEN` is automatic:
+   ```yaml
+   jobs:
+     deploy:
+       uses: Orhevba/ci-pipeline-kit/.github/workflows/deploy-k8s.yml@main
+       with:
+         manifests-path: ./k8s
+         namespace: default
+       secrets:
+         kubeconfig: ${{ secrets.KUBECONFIG_B64 }}
+   ```
+   Store that secret as the *whole kubeconfig file*, base64-encoded:
+   ```sh
+   cat ~/.kube/config | base64 -w0 | gh secret set KUBECONFIG_B64 --repo <owner>/<repo>
+   ```
+
+## Versioning
+
+Every example above pins `@main` for simplicity while this is a personal
+project under active development. For anything you'd actually depend on
+long-term, pin a tag instead (`@v1`, or a specific commit SHA) once this
+repo starts cutting releases — pinning `@main` means a caller gets
+whatever this repo's default branch looks like *right now*, which is
+fine for learning/portfolio use but not for a pipeline you don't want to
+break out from under you.
+
+## Dogfooding
+
+[`gitops-drift-detector`](https://github.com/Orhevba/gitops-drift-detector)'s
+own CI (`.github/workflows/ci.yml`) uses this kit's `go-lint`, `go-test`,
+and `go-security-scan` reusable workflows — proof this is actually used
+for something real, not just an example repo talking to itself, and it
+picked up dependency vulnerability scanning it didn't have before in the
+process.

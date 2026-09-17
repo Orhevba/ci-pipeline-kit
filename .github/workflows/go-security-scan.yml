@@ -1,0 +1,51 @@
+name: Go Security Scan
+
+# Two checks, deliberately different in kind:
+#   - gosec: static analysis for insecure code *patterns* (e.g. hardcoded
+#     credentials, SQL injection shapes, weak crypto)
+#   - govulncheck: checks your actual dependencies against the Go
+#     vulnerability database for *known* CVEs, and — unlike a plain
+#     dependency audit — only flags ones your code's call graph can
+#     actually reach, cutting a lot of noise from unreachable code paths.
+#
+# Both installed via `go install` rather than pinned third-party Actions,
+# so the exact tool version is controlled by go.sum-style pinning if you
+# want it, not an opaque Action release.
+
+on:
+  workflow_call:
+    inputs:
+      go-version:
+        type: string
+        default: "1.22"
+      working-directory:
+        type: string
+        default: "."
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+          cache: true
+
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Run gosec
+        run: gosec ./...
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...

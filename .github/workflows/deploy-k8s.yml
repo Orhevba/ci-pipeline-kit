@@ -1,0 +1,49 @@
+name: Deploy to Kubernetes
+
+# Stack-agnostic — applies manifests to a cluster via a kubeconfig passed
+# as a secret. The kubeconfig secret should be the *whole kubeconfig
+# file*, base64-encoded, e.g.:
+#   cat ~/.kube/config | base64 -w0 | gh secret set KUBECONFIG_B64 --repo <owner>/<repo>
+#
+# The caller passes it through explicitly (reusable workflows don't
+# inherit custom secrets automatically — only GITHUB_TOKEN is automatic):
+#   jobs:
+#     deploy:
+#       uses: <owner>/ci-pipeline-kit/.github/workflows/deploy-k8s.yml@main
+#       with:
+#         manifests-path: ./k8s
+#         namespace: default
+#       secrets:
+#         kubeconfig: ${{ secrets.KUBECONFIG_B64 }}
+
+on:
+  workflow_call:
+    inputs:
+      manifests-path:
+        required: true
+        type: string
+      namespace:
+        type: string
+        default: default
+    secrets:
+      kubeconfig:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.kubeconfig }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Apply manifests
+        run: kubectl apply -f "${{ inputs.manifests-path }}" -n "${{ inputs.namespace }}"

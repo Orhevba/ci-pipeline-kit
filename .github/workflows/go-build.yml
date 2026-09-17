@@ -1,0 +1,57 @@
+name: Go Build
+
+on:
+  workflow_call:
+    inputs:
+      go-version:
+        type: string
+        default: "1.22"
+      working-directory:
+        type: string
+        default: "."
+      build-path:
+        description: Package(s) to build, e.g. "./..." or "./cmd/manager"
+        type: string
+        default: "./..."
+      upload-artifact:
+        description: Upload the built binary as a workflow artifact
+        type: boolean
+        default: false
+      artifact-name:
+        type: string
+        default: "binary"
+      output-path:
+        description: Output path for the binary, only used when upload-artifact is true
+        type: string
+        default: "./out/app"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+          cache: true
+
+      - name: Build
+        run: |
+          if [ "${{ inputs.upload-artifact }}" = "true" ]; then
+            go build -o "${{ inputs.output-path }}" ${{ inputs.build-path }}
+          else
+            go build ${{ inputs.build-path }}
+          fi
+
+      - name: Upload artifact
+        if: inputs.upload-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.working-directory }}/${{ inputs.output-path }}

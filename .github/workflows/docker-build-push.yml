@@ -1,0 +1,52 @@
+name: Docker Build & Push
+
+# Stack-agnostic — works for Go, Node, Python, anything with a Dockerfile.
+# Pushes to GitHub Container Registry (ghcr.io) using the automatic
+# GITHUB_TOKEN, so no separate registry credentials need to be configured
+# as secrets. The CALLING workflow's job still needs to grant
+# `permissions: packages: write` itself — a reusable workflow's own
+# `permissions:` block can only narrow what the caller already granted,
+# never widen it.
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        required: true
+        type: string
+      dockerfile:
+        type: string
+        default: Dockerfile
+      context:
+        type: string
+        default: "."
+      push:
+        description: Actually push the image (false = build-only, e.g. for a PR)
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        if: inputs.push
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and (optionally) push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          push: ${{ inputs.push }}
+          tags: ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}:${{ github.sha }}

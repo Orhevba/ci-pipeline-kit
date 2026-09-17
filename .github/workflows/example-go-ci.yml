@@ -1,0 +1,48 @@
+name: Example — Go project
+
+# Demonstrates chaining the Go stages together as an actual pipeline, run
+# for real (not just documentation) against the sample app in
+# examples/go-project. This is what a *caller* workflow looks like in
+# another repo using this kit — the only difference cross-repo is the
+# `uses:` line becomes `owner/ci-pipeline-kit/.github/workflows/x.yml@main`
+# instead of the relative `./.github/workflows/x.yml` used here, since
+# this example happens to live in the same repo as the kit itself.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/go-project/**"
+      - ".github/workflows/example-go-ci.yml"
+      - ".github/workflows/go-*.yml"
+  pull_request:
+    paths:
+      - "examples/go-project/**"
+      - ".github/workflows/example-go-ci.yml"
+      - ".github/workflows/go-*.yml"
+  workflow_dispatch: {}
+
+jobs:
+  lint:
+    uses: ./.github/workflows/go-lint.yml
+    with:
+      working-directory: examples/go-project
+
+  test:
+    uses: ./.github/workflows/go-test.yml
+    with:
+      working-directory: examples/go-project
+
+  security-scan:
+    uses: ./.github/workflows/go-security-scan.yml
+    with:
+      working-directory: examples/go-project
+
+  build:
+    needs: [lint, test, security-scan]
+    uses: ./.github/workflows/go-build.yml
+    with:
+      working-directory: examples/go-project
+      upload-artifact: true
+      artifact-name: go-project-binary
+      output-path: ./out/go-project

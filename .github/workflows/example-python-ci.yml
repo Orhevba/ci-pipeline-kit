@@ -1,0 +1,21 @@
+name: Example — Python project
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/python-project/**"
+      - ".github/workflows/example-python-ci.yml"
+      - ".github/workflows/python-ci.yml"
+  pull_request:
+    paths:
+      - "examples/python-project/**"
+      - ".github/workflows/example-python-ci.yml"
+      - ".github/workflows/python-ci.yml"
+  workflow_dispatch: {}
+
+jobs:
+  ci:
+    uses: ./.github/workflows/python-ci.yml
+    with:
+      working-directory: examples/python-project

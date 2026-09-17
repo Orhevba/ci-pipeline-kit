@@ -1,0 +1,25 @@
+name: Self Test
+
+# CI for this repo itself: statically validates every workflow file here
+# (including the example callers) with actionlint — catches broken YAML,
+# unknown inputs, typo'd expressions, and other mistakes that would
+# otherwise only surface when someone else's pipeline actually calls one
+# of these and it fails at runtime.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Download actionlint
+        run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+
+      - name: Run actionlint
+        run: ./actionlint -color

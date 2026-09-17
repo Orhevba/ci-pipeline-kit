@@ -1,0 +1,21 @@
+name: Example — Node project
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/node-project/**"
+      - ".github/workflows/example-node-ci.yml"
+      - ".github/workflows/node-ci.yml"
+  pull_request:
+    paths:
+      - "examples/node-project/**"
+      - ".github/workflows/example-node-ci.yml"
+      - ".github/workflows/node-ci.yml"
+  workflow_dispatch: {}
+
+jobs:
+  ci:
+    uses: ./.github/workflows/node-ci.yml
+    with:
+      working-directory: examples/node-project

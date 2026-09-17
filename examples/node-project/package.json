@@ -1,0 +1,11 @@
+{
+  "name": "node-project",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Minimal example app proving the Node reusable workflow works end to end.",
+  "scripts": {
+    "lint": "node --check index.js",
+    "test": "node --test"
+  }
+}

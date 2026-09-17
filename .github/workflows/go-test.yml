@@ -1,0 +1,33 @@
+name: Go Test
+
+on:
+  workflow_call:
+    inputs:
+      go-version:
+        type: string
+        default: "1.22"
+      working-directory:
+        type: string
+        default: "."
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+          cache: true
+
+      - name: Build (catches compile errors before test does)
+        run: go build ./...
+
+      - name: Test
+        run: go test ./... -v -cover
