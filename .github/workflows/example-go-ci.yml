@@ -45,4 +45,4 @@ jobs:
       working-directory: examples/go-project
       upload-artifact: true
       artifact-name: go-project-binary
-      output-path: ./out/go-project
+      output-path: out/go-project

@@ -23,7 +23,7 @@ on:
       output-path:
         description: Output path for the binary, only used when upload-artifact is true
         type: string
-        default: "./out/app"
+        default: "out/app"
 
 jobs:
   build:
