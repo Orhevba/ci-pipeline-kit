@@ -17,7 +17,7 @@ on:
     inputs:
       go-version:
         type: string
-        default: "1.23"
+        default: "stable"
       working-directory:
         type: string
         default: "."

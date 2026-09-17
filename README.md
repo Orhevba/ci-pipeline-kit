@@ -60,6 +60,18 @@ stage-by-stage parity on day one. Extending either to match Go's depth
 means adding `node-security-scan.yml`/`node-build.yml` (and the Python
 equivalents) the same way the Go ones are built.
 
+The Go workflows default `go-version` to `"stable"` (an
+`actions/setup-go` keyword resolving to the current latest release)
+rather than a hardcoded number like `"1.23"` — learned the hard way
+while building this: `govulncheck` failed the very first real run of
+`go-security-scan.yml` against a pinned old version, and a dozen more
+stdlib CVEs surfaced the moment it was bumped to a version that was
+*merely* patched rather than genuinely current. Go only backports
+security fixes to its two most recent major releases, so any hardcoded
+version number here will eventually age out of support entirely — using
+`"stable"` sidesteps that whole class of problem rather than kicking it
+down the road to the next time someone has to notice and re-bump it.
+
 ## Examples (run for real, not just documentation)
 
 `examples/go-project`, `examples/node-project`, and
