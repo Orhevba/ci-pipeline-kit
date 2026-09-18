@@ -49,4 +49,11 @@ jobs:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
           push: ${{ inputs.push }}
-          tags: ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}:${{ github.sha }}
+          # Both an immutable SHA tag (for rollback/audit — know exactly
+          # which commit an image came from) and a moving `latest` tag
+          # (so a Deployment referencing :latest, and a plain
+          # `kubectl rollout restart`, picks up whatever was pushed most
+          # recently without needing to bump a version number).
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}:latest

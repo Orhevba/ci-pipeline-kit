@@ -117,6 +117,10 @@ might seem. The examples' own workflows call the reusable workflows with
          image-name: my-app
          push: true
    ```
+   Every push tags the image both `:<commit-sha>` (immutable, for
+   rollback/audit) and `:latest` (moving — so a Deployment referencing
+   `:latest` plus `kubectl rollout restart` always picks up whatever was
+   pushed most recently).
 4. For `deploy-k8s.yml`, pass the kubeconfig as a secret explicitly —
    reusable workflows don't inherit custom secrets automatically, only
    `GITHUB_TOKEN` is automatic:
