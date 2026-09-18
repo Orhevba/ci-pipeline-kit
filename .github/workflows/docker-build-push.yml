@@ -35,6 +35,16 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: Compute lowercase image reference
+        id: vars
+        # Docker registry names must be all-lowercase, but a GitHub
+        # owner/org (or a caller's image-name input) might not be —
+        # found exactly this building against "Orhevba" (capital O),
+        # which made every tag below get rejected outright at build
+        # time. Lowercase once here rather than at every place the tag
+        # gets built.
+        run: echo "image=ghcr.io/$(echo '${{ github.repository_owner }}/${{ inputs.image-name }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
       - name: Log in to GHCR
         if: inputs.push
         uses: docker/login-action@v3
@@ -55,5 +65,5 @@ jobs:
           # `kubectl rollout restart`, picks up whatever was pushed most
           # recently without needing to bump a version number).
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}:latest
+            ${{ steps.vars.outputs.image }}:${{ github.sha }}
+            ${{ steps.vars.outputs.image }}:latest
