@@ -5,12 +5,14 @@ on:
     branches: [master]
     paths:
       - "examples/python-project/**"
+      - "examples/python-insecure/**"
       - ".github/workflows/example-python-ci.yml"
       - ".github/workflows/python-ci.yml"
       - ".github/workflows/python-security-scan.yml"
   pull_request:
     paths:
       - "examples/python-project/**"
+      - "examples/python-insecure/**"
       - ".github/workflows/example-python-ci.yml"
       - ".github/workflows/python-ci.yml"
       - ".github/workflows/python-security-scan.yml"
@@ -28,3 +30,13 @@ jobs:
     uses: ./.github/workflows/python-security-scan.yml
     with:
       working-directory: examples/python-project
+
+  # The opposite proof: a project that is BAD on purpose (an insecure call and a known-vulnerable pin). In report-only mode the scan must
+  # still run to the end, write its tables and pass. Before this existed, a bug that made the tools' non-zero exit stop the step before
+  # the report was written went unnoticed, because the clean example above never triggers it.
+  security-reports-problems:
+    uses: ./.github/workflows/python-security-scan.yml
+    with:
+      working-directory: examples/python-insecure
+      audit-fail: false
+      bandit-fail-level: none

@@ -1,0 +1,2 @@
+# Deliberately old, known-vulnerable pins (urllib3 1.26.4 has published advisories) - see app.py.
+urllib3==1.26.4
