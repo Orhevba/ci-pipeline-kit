@@ -7,15 +7,24 @@ on:
       - "examples/python-project/**"
       - ".github/workflows/example-python-ci.yml"
       - ".github/workflows/python-ci.yml"
+      - ".github/workflows/python-security-scan.yml"
   pull_request:
     paths:
       - "examples/python-project/**"
       - ".github/workflows/example-python-ci.yml"
       - ".github/workflows/python-ci.yml"
+      - ".github/workflows/python-security-scan.yml"
   workflow_dispatch: {}
 
 jobs:
   ci:
     uses: ./.github/workflows/python-ci.yml
+    with:
+      working-directory: examples/python-project
+
+  # Proves the security scan on a real (tiny) project on every change to it. The example has no dependencies and no risky code, so
+  # the strict defaults must pass - a failure here means the scan itself is broken, not the example.
+  security:
+    uses: ./.github/workflows/python-security-scan.yml
     with:
       working-directory: examples/python-project

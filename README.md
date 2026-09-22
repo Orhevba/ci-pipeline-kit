@@ -49,6 +49,7 @@ jobs:
 | `go-build.yml` | `go build`, optional artifact upload | Go |
 | `node-ci.yml` | install, lint, test — combined, lighter | Node |
 | `python-ci.yml` | install, `ruff` lint, `pytest` — combined, lighter | Python |
+| `python-security-scan.yml` | `pip-audit` (known-vulnerable dependencies) + `bandit` (insecure code patterns), two separate jobs | Python |
 | `docker-build-push.yml` | build (and optionally push to GHCR) an image | any — stack-agnostic |
 | `deploy-k8s.yml` | `kubectl apply` against a target cluster | any — stack-agnostic |
 
@@ -138,6 +139,51 @@ might seem. The examples' own workflows call the reusable workflows with
    ```sh
    cat ~/.kube/config | base64 -w0 | gh secret set KUBECONFIG_B64 --repo <owner>/<repo>
    ```
+
+## Python security scan (`python-security-scan.yml`)
+
+Two independent jobs, each with its own readable table on the run's **Summary** page and annotations on the offending lines:
+
+| Job | Tool | Question it answers |
+|---|---|---|
+| `dependencies` | [pip-audit](https://github.com/pypa/pip-audit) | Is any package in `requirements.txt` - **or any package those pull in** - a version with a known vulnerability? |
+| `code` | [bandit](https://github.com/PyCQA/bandit) | Does *your* code contain insecure patterns: `shell=True`, unverified TLS/SSH host keys, weak hashes, `eval`, hard-coded passwords...? |
+
+```yaml
+jobs:
+  security-scan:
+    uses: Orhevba/ci-pipeline-kit/.github/workflows/python-security-scan.yml@master
+    # with:                          # every input is optional; these are the defaults
+    #   python-version: "3.12"
+    #   working-directory: "."
+    #   requirements-file: requirements.txt
+    #   audit-fail: true             # fail on a vulnerable dependency (false = report only)
+    #   audit-ignore: ""             # advisory IDs you accept for now, space-separated
+    #   bandit-fail-level: high      # none | low | medium | high  (none = report only)
+    #   bandit-exclude: "./tests,./test,./venv,./.venv,*/node_modules/*,./build,./dist"
+```
+
+**Adopting it on an existing project - report first, then enforce.** Switching a scan on usually finds old problems on day one, and a check
+that is red from the start gets ignored. So begin with `audit-fail: false` and `bandit-fail-level: none` (the jobs still run and still
+write the tables), fix what they show, then remove those two lines so the strict defaults apply. That is a *ratchet*: it can only tighten.
+
+**New advisories are published every week**, so a project with no code changes can turn red. Call the scan on a schedule too, so that
+happens on your terms:
+```yaml
+on:
+  push: { branches: [main] }
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"     # Mondays 05:17
+```
+
+**Silencing a finding you have judged safe** (always say why):
+- bandit: put `# nosec B603` on that line, e.g. `subprocess.run(["ffmpeg", *args])  # nosec B603 - fixed argv, no user input`. A `[tool.bandit]`
+  section in `pyproject.toml` is picked up automatically (e.g. `skips = ["B101"]`).
+- pip-audit: add the advisory ID to `audit-ignore` and note *when you will revisit it*.
+
+A tool that cannot run at all (e.g. the requirements cannot be resolved) is reported as a failure of the check, never as a pass - even in
+report-only mode it leaves an annotation.
 
 ## Versioning
 

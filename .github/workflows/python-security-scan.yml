@@ -1,0 +1,205 @@
+name: Python Security Scan
+
+# Two independent checks, as two jobs so each shows up (and can pass or fail) on its own:
+#
+#   dependencies  pip-audit - is any package your requirements pull in (directly OR indirectly) a version with a KNOWN vulnerability?
+#   code          bandit    - does YOUR code contain insecure patterns (shell=True, unverified TLS/SSH, weak hashes, eval...)?
+#
+# Both write a readable table to the run's Summary page and annotate the offending lines, so you never have to dig through raw logs.
+#
+# How strict it is is per-caller, on purpose. Turning a scan on in an existing project usually finds old problems on day one, and a
+# check that is red from the start just gets ignored - so start with `audit-fail: false` / `bandit-fail-level: none` (report only),
+# fix what it finds, then flip them to enforce. Note that new advisories are published every week, so a project with NO code changes
+# can go red: call this on a weekly `schedule:` too (see the README) so that happens on your terms, not the day you're in a hurry.
+#
+# Suppress a bandit finding you have judged safe with a `# nosec B603` comment on that line (say WHY next to it); accept a known
+# advisory you cannot fix yet with `audit-ignore`. A `[tool.bandit]` section in pyproject.toml is picked up automatically.
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        default: "3.12"
+      working-directory:
+        type: string
+        default: "."
+      requirements-file:
+        description: "Requirements file to audit, relative to working-directory"
+        type: string
+        default: "requirements.txt"
+      audit-fail:
+        description: "Fail the job when a dependency has a known vulnerability (false = report only)"
+        type: boolean
+        default: true
+      audit-ignore:
+        description: "Space-separated advisory IDs to accept for now (e.g. PYSEC-2026-1234 CVE-2026-9999)"
+        type: string
+        default: ""
+      bandit-fail-level:
+        description: "Fail when bandit finds this severity or worse: none | low | medium | high (none = report only)"
+        type: string
+        default: "high"
+      bandit-exclude:
+        description: "Comma-separated paths/globs bandit should skip"
+        type: string
+        default: "./tests,./test,./venv,./.venv,*/node_modules/*,./build,./dist"
+
+jobs:
+  dependencies:
+    name: Dependencies (pip-audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Audit dependencies
+        # Inputs reach the shell through the environment, never through ${{ }} in the script body.
+        env:
+          REQUIREMENTS: ${{ inputs.requirements-file }}
+          FAIL: ${{ inputs.audit-fail }}
+          IGNORE: ${{ inputs.audit-ignore }}
+        run: |
+          set -uo pipefail
+          python -m pip install --upgrade pip pip-audit >/dev/null
+          ignore_args=()
+          for id in $IGNORE; do ignore_args+=(--ignore-vuln "$id"); done
+          # pip-audit resolves the FULL tree (your packages and the ones they pull in) and asks the Python packaging advisory database.
+          # It exits non-zero when it finds something, so capture that instead of letting the shell stop: the report comes first.
+          set +e
+          pip-audit -r "$REQUIREMENTS" "${ignore_args[@]}" -f json -o audit.json 2> audit.err
+          rc=$?
+          set -e
+          python - <<'PY'
+          import json, os, sys
+
+          fail = os.environ["FAIL"] == "true"
+          summary = open(os.environ["GITHUB_STEP_SUMMARY"], "a")
+          say = lambda line="": (print(line), summary.write(line + "\n"))
+          say("### Dependency audit (pip-audit)")
+          try:
+              data = json.load(open("audit.json"))
+          except (OSError, ValueError):
+              say("**pip-audit could not produce a report** - the requirements probably could not be resolved. Its own message:")
+              say("```\n" + open("audit.err").read()[-2500:] + "\n```")
+              print(f"::{'error' if fail else 'warning'}::pip-audit failed to run, so the dependencies were NOT checked")
+              sys.exit(1 if fail else 0)
+
+          deps = data.get("dependencies", [])
+          seen, rows = set(), []
+          for d in deps:                                    # the same advisory can be listed twice for one package: count it once
+              for v in d.get("vulns", []):
+                  if (d["name"], d["version"], v["id"]) not in seen:
+                      seen.add((d["name"], d["version"], v["id"]))
+                      rows.append((d["name"], d["version"], v))
+          rows.sort(key=lambda r: (r[0].lower(), r[1], r[2]["id"]))
+          skipped = [d for d in deps if d.get("skip_reason")]
+          say(f"Checked **{len(deps)}** packages (including everything they pull in).")
+          if skipped:
+              say("Not checked (not on PyPI, so no advisory data): " + ", ".join(f"`{d['name']}`" for d in skipped))
+          if not rows:
+              say("\n**No known vulnerabilities found.**")
+              sys.exit(0)
+
+          packages = sorted({r[0] for r in rows})
+          say(f"\n**{len(rows)} known vulnerabilities in {len(packages)} package(s):** " + ", ".join(f"`{p}`" for p in packages))
+          say("\n| Package | Installed | Advisory | Fixed in |")
+          say("|---|---|---|---|")
+          for name, version, v in rows:
+              say(f"| {name} | {version} | {v['id']} | {', '.join(v.get('fix_versions') or ['no fix yet'])} |")
+          # the highest fixed version per package is what you would actually upgrade to
+          say("\nTo clear them, upgrade to at least:")
+          for name in packages:
+              fixes = [f for n, _, v in rows if n == name for f in (v.get("fix_versions") or [])]
+              say(f"- `{name}`: {max(fixes, key=lambda s: [int(p) if p.isdigit() else 0 for p in s.replace('-', '.').split('.')]) if fixes else 'no fix released yet'}")
+          level = "error" if fail else "warning"
+          print(f"::{level}::{len(rows)} known vulnerabilities in {', '.join(packages)} - see the run summary")
+          sys.exit(1 if fail else 0)
+          PY
+
+  code:
+    name: Code (bandit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Scan the code
+        env:
+          LEVEL: ${{ inputs.bandit-fail-level }}
+          EXCLUDE: ${{ inputs.bandit-exclude }}
+          WORKDIR: ${{ inputs.working-directory }}
+        run: |
+          set -uo pipefail
+          python -m pip install --upgrade pip bandit >/dev/null
+          config_args=()
+          if [ -f pyproject.toml ] && grep -q '^\[tool\.bandit' pyproject.toml; then config_args=(-c pyproject.toml); fi
+          set +e
+          bandit -r . -x "$EXCLUDE" "${config_args[@]}" -f json -o bandit.json -q 2> bandit.err
+          set -e
+          python - <<'PY'
+          import collections, json, os, sys
+
+          level = os.environ["LEVEL"].strip().lower()
+          threshold = {"none": 99, "low": 1, "medium": 2, "high": 3}.get(level)
+          if threshold is None:
+              print(f"::error::bandit-fail-level must be none, low, medium or high (got '{level}')")
+              sys.exit(2)
+          rank = {"LOW": 1, "MEDIUM": 2, "HIGH": 3}
+          prefix = "" if os.environ["WORKDIR"] in ("", ".") else os.environ["WORKDIR"].rstrip("/") + "/"
+          summary = open(os.environ["GITHUB_STEP_SUMMARY"], "a")
+          say = lambda line="": (print(line), summary.write(line + "\n"))
+          say("### Code scan (bandit)")
+          try:
+              data = json.load(open("bandit.json"))
+          except (OSError, ValueError):
+              say("**bandit could not produce a report.** Its own message:")
+              say("```\n" + open("bandit.err").read()[-2500:] + "\n```")
+              print("::error::bandit failed to run, so the code was NOT scanned")
+              sys.exit(1)
+
+          results = data.get("results", [])
+          count = collections.Counter(r["issue_severity"] for r in results)
+          files = len([f for f in data.get("metrics", {}) if f != "_totals"])
+          say(f"Scanned **{files}** files: **{count['HIGH']} high**, **{count['MEDIUM']} medium**, {count['LOW']} low.")
+          if data.get("errors"):
+              say(f"\n{len(data['errors'])} file(s) could not be parsed and were skipped.")
+
+          worth_showing = sorted((r for r in results if rank[r["issue_severity"]] >= 2),
+                                 key=lambda r: (-rank[r["issue_severity"]], r["filename"], r["line_number"]))
+          if worth_showing:
+              say("\n| Severity | Where | Check | What it means |")
+              say("|---|---|---|---|")
+              for r in worth_showing[:60]:
+                  where = f"`{r['filename'].lstrip('./')}:{r['line_number']}`"
+                  say(f"| {r['issue_severity'].title()} ({r['issue_confidence'].lower()} confidence) | {where} | {r['test_id']} {r['test_name']} | {r['issue_text']} |")
+              if len(worth_showing) > 60:
+                  say(f"\n...and {len(worth_showing) - 60} more medium/high findings.")
+              say("\nJudged one safe? Put `# nosec <ID>` on that line with the reason. Low-severity findings are counted but not listed.")
+          for r in worth_showing:
+              kind = "error" if r["issue_severity"] == "HIGH" else "warning"
+              path = prefix + r["filename"].lstrip("./")
+              print(f"::{kind} file={path},line={r['line_number']},title=bandit {r['test_id']}::{r['issue_text']}")
+
+          blocking = [r for r in results if rank[r["issue_severity"]] >= threshold]
+          if blocking:
+              say(f"\n**Failing: {len(blocking)} finding(s) at '{level}' severity or worse** (set `bandit-fail-level` higher, or fix / `# nosec` them).")
+              sys.exit(1)
+          say("\nNothing at or above the failing level ('" + level + "')." if level != "none" else "\nReport only (`bandit-fail-level: none`).")
+          PY
