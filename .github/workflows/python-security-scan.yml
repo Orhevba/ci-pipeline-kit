@@ -73,11 +73,9 @@ jobs:
           ignore_args=()
           for id in $IGNORE; do ignore_args+=(--ignore-vuln "$id"); done
           # pip-audit resolves the FULL tree (your packages and the ones they pull in) and asks the Python packaging advisory database.
-          # It exits non-zero when it finds something, so capture that instead of letting the shell stop: the report comes first.
-          set +e
+          # It exits non-zero when it finds something. There is deliberately no `set -e` here: the report below decides pass or fail,
+          # and it must run either way.
           pip-audit -r "$REQUIREMENTS" "${ignore_args[@]}" -f json -o audit.json 2> audit.err
-          rc=$?
-          set -e
           python - <<'PY'
           import json, os, sys
 
@@ -150,9 +148,8 @@ jobs:
           python -m pip install --upgrade pip bandit >/dev/null
           config_args=()
           if [ -f pyproject.toml ] && grep -q '^\[tool\.bandit' pyproject.toml; then config_args=(-c pyproject.toml); fi
-          set +e
+          # bandit exits non-zero when it finds anything; the report below decides pass or fail, so it must always run.
           bandit -r . -x "$EXCLUDE" "${config_args[@]}" -f json -o bandit.json -q 2> bandit.err
-          set -e
           python - <<'PY'
           import collections, json, os, sys
 
