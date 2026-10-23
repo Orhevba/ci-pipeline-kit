@@ -1,0 +1,112 @@
+# A single GitHub Actions runner for a repo, running as a pod on the k3s node,
+# for when GitHub-hosted minutes run out (free tier). See README.md here.
+#
+# The runner container has no Docker of its own: a privileged docker:dind
+# sidecar provides the daemon (over localhost) and an init container copies the
+# docker CLI + buildx plugin in, which is all docker/build-push-action needs.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: actions-runner
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: runner-data
+  namespace: actions-runner
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 30Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runner
+  namespace: actions-runner
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: runner}
+  template:
+    metadata:
+      labels: {app: runner}
+    spec:
+      initContainers:
+        - name: docker-cli
+          image: docker:27-cli
+          command: [sh, -c]
+          args:
+            - |
+              set -e
+              mkdir -p /out/plugins
+              cp /usr/local/bin/docker /out/
+              wget -qO /out/plugins/docker-buildx https://github.com/docker/buildx/releases/download/v0.19.3/buildx-v0.19.3.linux-amd64
+              chmod +x /out/plugins/docker-buildx
+          volumeMounts:
+            - {name: docker-cli, mountPath: /out}
+      containers:
+        - name: runner
+          image: ghcr.io/actions/actions-runner:2.338.1
+          command: [bash, -c]
+          args:
+            - |
+              set -e
+              cd /home/runner
+              S=/state/registration
+              mkdir -p "$S" ~/.docker
+              ln -sfn /docker-cli/plugins ~/.docker/cli-plugins
+              # Register once; later starts reuse the saved credentials, so the
+              # one-hour registration token only has to be valid the first time.
+              if [ -f "$S/.runner" ]; then
+                cp "$S"/.runner "$S"/.credentials "$S"/.credentials_rsaparams .
+              else
+                ./config.sh --unattended --replace --url "$RUNNER_URL" --token "$(printf %s "$RUNNER_REG_TOKEN" | tr -d "[:space:]")" \
+                  --name "$RUNNER_NAME" --labels "$RUNNER_LABELS"
+                cp .runner .credentials .credentials_rsaparams "$S"/
+              fi
+              exec ./run.sh
+          env:
+            - {name: RUNNER_URL, value: "https://github.com/Orhevba/purser-shell"}
+            - {name: RUNNER_NAME, value: kube-os}
+            - {name: RUNNER_LABELS, value: k3s}
+            - {name: DOCKER_HOST, value: "unix:///run/dind/docker.sock"}
+            - {name: PATH, value: "/docker-cli:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
+            - name: RUNNER_REG_TOKEN
+              valueFrom:
+                secretKeyRef: {name: runner-registration, key: token, optional: true}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {memory: 6Gi}
+          volumeMounts:
+            - {name: docker-cli, mountPath: /docker-cli}
+            - {name: dind-sock, mountPath: /run/dind}
+            - {name: data, mountPath: /state, subPath: runner}
+            - {name: work, mountPath: /home/runner/_work}
+        - name: dind
+          image: docker:27-dind
+          securityContext:
+            privileged: true
+          env:
+            - {name: DOCKER_TLS_CERTDIR, value: ""}
+          # Unix socket only, shared with the runner: a TCP listener would give
+          # every pod in the cluster root on this node.
+          args: [dockerd, "--host=unix:///run/dind/docker.sock", "--group=1001"]
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+          volumeMounts:
+            - {name: dind-sock, mountPath: /run/dind}
+            - {name: data, mountPath: /var/lib/docker, subPath: docker}
+            - {name: work, mountPath: /home/runner/_work}
+      volumes:
+        - name: docker-cli
+          emptyDir: {}
+        - name: work
+          emptyDir: {}
+        - name: dind-sock
+          emptyDir: {}
+        - name: data
+          persistentVolumeClaim: {claimName: runner-data}
