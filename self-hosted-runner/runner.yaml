@@ -35,6 +35,9 @@ spec:
     metadata:
       labels: {app: runner}
     spec:
+      # No cluster API access for CI jobs; it also keeps tests that probe for
+      # "am I in Kubernetes" from seeing a service account.
+      automountServiceAccountToken: false
       initContainers:
         - name: docker-cli
           image: docker:27-cli
