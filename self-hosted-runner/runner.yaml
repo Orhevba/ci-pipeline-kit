@@ -99,7 +99,9 @@ spec:
             - {name: DOCKER_TLS_CERTDIR, value: ""}
           # Unix socket only, shared with the runner: a TCP listener would give
           # every pod in the cluster root on this node.
-          args: [dockerd, "--host=unix:///run/dind/docker.sock", "--group=1001"]
+          # --mtu: the pod network is 1450, Docker's default 1500 stalls large
+          # TLS downloads (e.g. npm prebuilt binaries) inside builds.
+          args: [dockerd, "--host=unix:///run/dind/docker.sock", "--group=1001", "--mtu=1400"]
           resources:
             requests: {cpu: 500m, memory: 1Gi}
           volumeMounts:
