@@ -35,6 +35,8 @@ spec:
     metadata:
       labels: {app: runner}
     spec:
+      # No cluster API access for CI jobs.
+      automountServiceAccountToken: false
       initContainers:
         - name: docker-cli
           image: docker:27-cli
@@ -72,6 +74,9 @@ spec:
           env:
             - {name: RUNNER_URL, value: "https://github.com/Orhevba/purser-shell"}
             - {name: RUNNER_NAME, value: kube-os}
+            # Tests that probe for "am I in Kubernetes" (purser-shell's self-deploy)
+            # key off this variable, which Kubernetes injects into every pod.
+            - {name: KUBERNETES_SERVICE_HOST, value: ""}
             - {name: RUNNER_LABELS, value: k3s}
             - {name: DOCKER_HOST, value: "unix:///run/dind/docker.sock"}
             - {name: PATH, value: "/docker-cli:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
