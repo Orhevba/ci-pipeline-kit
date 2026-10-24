@@ -24,10 +24,14 @@ on:
         description: Actually push the image (false = build-only, e.g. for a PR)
         type: boolean
         default: false
+      runs-on:
+        description: Runner label (e.g. a self-hosted runner when hosted minutes run out)
+        type: string
+        default: ubuntu-latest
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     permissions:
       contents: read
       packages: write
